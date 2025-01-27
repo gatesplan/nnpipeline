@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "twine"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fish-nnpipeline"
+version = "0.0.1"
+description = "Neural Network Pipeline that helps you to build intricate network more easy way."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "안형준", email = "gatesplan@gmail.com" }
+]
+requires-python = ">=3.10"
+keywords = ["torch", "machine-learning", "builder"]
+classifiers = [
+  "Programming Language :: Python :: 3.10",
+  "Operating System :: OS Independent",
+  "License :: OSI Approved :: MIT License"
+]
+
+dependencies = [
+  "torch>=2.1,<2.2"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/gatesplan/nnpipeline"
+"Issues" = "https://github.com/gatesplan/nnpipeline/issues"
