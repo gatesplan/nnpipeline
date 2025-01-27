@@ -33,7 +33,7 @@ class LinearJoint(Pipe):
         입력된 데이터를 연결하여 반환한다.
         """
         try:
-            return torch.cat(args, dim=0)
+            return torch.cat(args, dim=1)
         except Exception as e:
             # 입력 데이터 길이 검사
             if len(args) != len(self.input_sizes):
