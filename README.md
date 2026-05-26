@@ -1,109 +1,87 @@
 # Neural Network Pipeline
 
-Simple network building pipeline for PyTorch. (torch>=2.1,<2.2)
+자주 쓰는 1D MLP 형상을 미리 정의해 둔 PyTorch 프리셋 모음.
 
+각 프리셋은 `nn.Sequential`의 서브클래스라 만들자마자 torch 네트워크 객체로 쓸 수 있다.
+활성함수/정규화/드롭아웃 같이 층 사이에 끼우는 모듈은 사용자가 직접 인스턴스로 넘기고, 라이브러리는 그것들을 deepcopy해서 사이에 끼워 넣는다. 라이브러리가 활성함수 종류나 정규화 종류를 알 필요가 없다.
 
-## How to start?
+## 설치
 
-1. install `pip install fish-nnpipeline` and `import nnpipeline`
-
-2. create a pipe base object. (ex: `layer = nnpipeline.LinearExponentialEncoder(10, 5))
-
-3. chain it to `torch.nn.sequential` or do whatever you want. all pipeline object follows `torch.nn.Module`..
-   (at least `forward` method exists.)
-
-
-## Explain of each pipeline object
-
-1. Layers
-
-1.1. `LinearExponentialEncoder` : Generate linear layers semi-automatically. You should give `in_features`, `out_features` and the class do the rest.
-
-You can control narrowing node ratio by `compression_rate` parameter. (default 0.618) Also can use noramlization, dropout.
-
-You cannot alter order between linear and others like norm, activation, dropout. It has been fixed (linear -> norm -> activation -> dropout) because I'm super lazy.
-
-```aiignore
-lee = LinearExponentialEncoder(100, 34)
+```bash
+pip install fish-nnpipeline
 ```
 
-```aiignore
-# what lee is..
-LinearExponentialEncoder(
-  (layers): Sequential(
-    (0): Linear(in_features=100, out_features=61, bias=True)
-    (1): BatchNorm1d(61, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (2): ReLU()
-    (3): Linear(in_features=61, out_features=37, bias=True)
-    (4): BatchNorm1d(37, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (5): ReLU()
-    (6): Linear(in_features=37, out_features=34, bias=True)
-    (7): BatchNorm1d(34, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (8): ReLU()
-  )
+## 형상
+
+### Cylinder
+
+동일 폭의 Linear 층을 `depth`개 쌓는다.
+
+```python
+from torch import nn
+from nnpipeline import Cylinder
+
+net = Cylinder(
+    in_features=64,
+    depth=3,
+    interlayer=[nn.BatchNorm1d(64), nn.ReLU()],
 )
 ```
 
-1.2. `LinearExponentialDecoder` : Encoder is narrowing down linear nodes. Decoder is expanding nodes. It's like a mirror of encoder.
-
-Those linear encoder/decoder work based on exponentially inceasing/decreasing sequence that start from `in_features` to `out_features`. As you can see above example of `lee`, it works just like normal torch.nn.Module object. So you can put this in `nn.Sequential` or something.
-
-1.3. `LinearCylinder` : Cylinder is a simple multi-layer module that has same input, output features. It looks just like a cylinder so the name is also cylinder.
-
-
-2. Glues
-
-2.1. `LinearJoint` LYou can concatenate multiple pipeline output to one single pipeline using `torch.cat`. yes you can do this by yourself, but I prefer this way more.
-
-
-3. Compositions
-
-3.1. `LinearExponentialComposition`: You can direcly use multiple pipes and join them manually, or you can simply define COMPOSITION class.
-
-```aiignore
-l1 = LinearExponentialEncoder(100, 35)
-l2 = LinearExponentialEncoder(150, 40)
-l3 = LinearExponentialEncoder(120, 30)
-
-lec = LinearExponentialComposition([l1, l2, l3], 80)
-print(lec)
 ```
-
-```aiignore
-# I'm lec!
-LinearExponentialComposition(
-  (pipes): ModuleList(
-    (0): LinearExponentialEncoder(
-      (layers): Sequential(
-        (0): Linear(in_features=100, out_features=61, bias=True)
-                ...
-        (8): ReLU()
-      )
-    )
-    (1): LinearExponentialEncoder(
-      (layers): Sequential(
-        (0): Linear(in_features=150, out_features=92, bias=True)
-                ...
-        (8): ReLU()
-      )
-    )
-    (2): LinearExponentialEncoder(
-      (layers): Sequential(
-        (0): Linear(in_features=120, out_features=74, bias=True)
-                ...
-        (8): ReLU()
-      )
-    )
-  )
-  (joint): LinearJoint()
-  (encoder): LinearExponentialEncoder(
-    (layers): Sequential(
-      (0): Linear(in_features=105, out_features=80, bias=True)
-      (1): BatchNorm1d(80, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-      (2): ReLU()
-    )
-  )
+Cylinder(
+  (0): Linear(in_features=64, out_features=64)
+  (1): BatchNorm1d(64, ...)
+  (2): ReLU()
+  (3): Linear(in_features=64, out_features=64)
+  (4): BatchNorm1d(64, ...)
+  (5): ReLU()
+  (6): Linear(in_features=64, out_features=64)
 )
 ```
 
-4. No more contents. I'm lazy. I'll add more later.
+### Pyramid
+
+폭이 `in_features`에서 `out_features`로 선형 보간되며 Linear 층 `depth`개를 쌓는다.
+
+```python
+from torch import nn
+from nnpipeline import Pyramid
+
+net = Pyramid(
+    in_features=100,
+    out_features=10,
+    depth=4,
+    interlayer=[nn.ReLU()],
+    pipe_head=[nn.LayerNorm(100)],
+    pipe_end=[nn.Tanh()],
+)
+```
+
+```
+Pyramid(
+  (0): LayerNorm((100,))
+  (1): Linear(in_features=100, out_features=78)
+  (2): ReLU()
+  (3): Linear(in_features=78, out_features=55)
+  (4): ReLU()
+  (5): Linear(in_features=55, out_features=32)
+  (6): ReLU()
+  (7): Linear(in_features=32, out_features=10)
+  (8): Tanh()
+)
+```
+
+## 파라미터 규칙
+
+세 프리셋이 공통으로 받는 모듈 리스트 파라미터:
+
+| 파라미터 | 위치 | 설명 |
+|---|---|---|
+| `pipe_head` | 맨 앞 | 첫 Linear 전에 한 번 |
+| `interlayer` | Linear 사이 | 마지막 Linear 뒤에는 붙지 않음 |
+| `pipe_end` | 맨 뒤 | 마지막 Linear 뒤에 한 번 |
+
+- 기본값은 모두 빈 리스트.
+- 안에 들어가는 모듈은 `deepcopy`되어 들어가므로, 동일 인스턴스를 넘겨도 사이사이에 독립 모듈이 생성된다.
+- `depth >= 1`이어야 한다.

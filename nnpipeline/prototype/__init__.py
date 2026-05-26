@@ -1,4 +1,4 @@
-from .BasePipe import BasePipe
-from .Pipe import Pipe
+from .cylinder import Cylinder
+from .pyramid import Pyramid
 
-__all__ = ["BasePipe", "Pipe"]
+__all__ = ["Cylinder", "Pyramid"]
