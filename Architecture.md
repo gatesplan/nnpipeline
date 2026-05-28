@@ -2,15 +2,22 @@
 
 ## 개요
 
-자주 쓰는 1D MLP 형상을 미리 정의해 둔 프리셋 라이브러리.
-각 프리셋은 `nn.Sequential`의 서브클래스로, 인스턴스를 만들면 곧바로 torch 네트워크 객체가 된다.
-활성함수/정규화/드롭아웃 등 사이에 끼우는 모듈은 사용자가 직접 인스턴스로 넘겨주고, 라이브러리는 deepcopy해서 사이사이에 끼운다.
+자주 쓰는 1D MLP 형상 프리셋 + 가격 시계열 도메인 receptor / receptor bundle 컨테이너 모음.
+
+- MLP 프리셋 (`Cylinder`, `Pyramid`) 은 `nn.Sequential` 서브클래스로, 인스턴스를 만들면 곧바로 torch 네트워크 객체가 된다.
+  활성함수/정규화/드롭아웃 등 사이에 끼우는 모듈은 사용자가 직접 인스턴스로 넘겨주고, 라이브러리는 deepcopy 해서 사이사이에 끼운다.
+- Receptor (`OHLCVReceptor`) 는 한 캔들(OHLC + V) 을 고정 차원 임베딩으로 변환하는 per-candle tokenizer.
+- Receptor Bundle (`ReceptorBundle`) 은 receptor 또는 다른 bundle 을 자식 노드로 묶는 composite 컨테이너로,
+  multi-resolution candle hierarchy 의 한 단계를 표현한다.
 
 ## 컴포넌트
 
 ```mermaid
 classDiagram
     class nn_Sequential {
+        <<torch>>
+    }
+    class nn_Module {
         <<torch>>
     }
 
@@ -31,8 +38,26 @@ classDiagram
         +pipe_end: list[nn.Module]
     }
 
+    class OHLCVReceptor {
+        +hidden: int
+        +side_dim: int
+        +hidden_v: int
+        +forward(hocl, v)
+    }
+
+    class ReceptorBundle {
+        +components: nn.ModuleList
+        +aggregator: nn.Module
+        +n_leaves: int
+        +forward(hocl, v)
+    }
+
     nn_Sequential <|-- Cylinder
     nn_Sequential <|-- Pyramid
+    nn_Module <|-- OHLCVReceptor
+    nn_Module <|-- ReceptorBundle
+    ReceptorBundle o-- "1..*" nn_Module : children
+    ReceptorBundle o-- "1" nn_Module : aggregator
 ```
 
 ## 조립 방식

@@ -9,3 +9,8 @@ Pyramid.__init__(in_features: int, out_features: int, depth: int, interlayer: li
 ## ohlcv_receptor
 OHLCVReceptor.__init__(hidden: int = 2, side_dim: int = 2, hidden_v: int = 4)
 OHLCVReceptor.forward(hocl: torch.Tensor, v: torch.Tensor) -> torch.Tensor
+
+## receptor_bundle
+ReceptorBundle.__init__(children: list, aggregator: nn.Module)
+ReceptorBundle.forward(hocl: torch.Tensor, v: torch.Tensor) -> torch.Tensor
+ReceptorBundle.n_leaves: int
