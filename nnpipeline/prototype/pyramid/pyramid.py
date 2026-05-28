@@ -13,10 +13,7 @@ def _validate_module_list(value, name):
 
 
 def _linear_width_sequence(in_features: int, out_features: int, depth: int) -> list:
-    """
-    in_features에서 out_features까지 depth+1개 노드로 선형 보간한 폭 시퀀스.
-    양 끝값은 정확히 in_features, out_features를 유지하고 중간은 정수 반올림.
-    """
+    # in_features ~ out_features 사이 depth+1 개 노드 폭을 선형 보간 (양 끝은 정확히 유지)
     if depth == 1:
         return [in_features, out_features]
 
@@ -29,11 +26,6 @@ def _linear_width_sequence(in_features: int, out_features: int, depth: int) -> l
 
 
 class Pyramid(nn.Sequential):
-    """
-    in_features에서 out_features로 폭이 선형 보간되는 Linear 층 depth개를 쌓는 1D MLP 프리셋.
-    Linear 사이에 interlayer 모듈들이 deepcopy되어 끼워진다.
-    앞뒤로 pipe_head, pipe_end가 deepcopy되어 붙는다.
-    """
 
     def __init__(
         self,
@@ -44,6 +36,7 @@ class Pyramid(nn.Sequential):
         pipe_head: list = None,
         pipe_end: list = None,
     ):
+        # 인자 검증
         if not isinstance(in_features, int) or in_features < 1:
             raise ValueError(f"in_features는 1 이상의 정수여야 합니다. 받은 값: {in_features}")
         if not isinstance(out_features, int) or out_features < 1:
@@ -61,6 +54,7 @@ class Pyramid(nn.Sequential):
 
         widths = _linear_width_sequence(in_features, out_features, depth)
 
+        # 모듈 시퀀스 구성
         modules = []
         modules.extend(deepcopy(m) for m in pipe_head)
 

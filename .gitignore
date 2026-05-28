@@ -1,2 +1,20 @@
 .idea/
 __pycache__/
+
+# Local settings
+.claude/settings.local.json
+
+# Cached external data
+.cache/
+
+# TensorBoard logs (throwaway)
+runs/
+
+# Cloned external repos for reference
+FAN/
+
+# Experiment outputs (regenerable, can grow large)
+experiments/*/results*/
+experiments/*/results_v*/
+experiments/*/results_multi/
+experiments/*/results_seed_sweep/

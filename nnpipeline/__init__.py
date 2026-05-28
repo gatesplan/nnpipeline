@@ -1,3 +1,3 @@
-from .prototype import Cylinder, Pyramid
+from .prototype import Cylinder, Pyramid, OHLCVReceptor
 
-__all__ = ["Cylinder", "Pyramid"]
+__all__ = ["Cylinder", "Pyramid", "OHLCVReceptor"]

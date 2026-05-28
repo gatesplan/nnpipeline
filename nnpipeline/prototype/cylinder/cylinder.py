@@ -13,11 +13,6 @@ def _validate_module_list(value, name):
 
 
 class Cylinder(nn.Sequential):
-    """
-    동일 폭의 Linear 층을 depth개 쌓는 1D MLP 프리셋.
-    Linear 사이에 interlayer 모듈들이 deepcopy되어 끼워진다.
-    앞뒤로 pipe_head, pipe_end가 deepcopy되어 붙는다.
-    """
 
     def __init__(
         self,
@@ -27,6 +22,7 @@ class Cylinder(nn.Sequential):
         pipe_head: list = None,
         pipe_end: list = None,
     ):
+        # 인자 검증
         if not isinstance(in_features, int) or in_features < 1:
             raise ValueError(f"in_features는 1 이상의 정수여야 합니다. 받은 값: {in_features}")
         if not isinstance(depth, int) or depth < 1:
@@ -40,6 +36,7 @@ class Cylinder(nn.Sequential):
         _validate_module_list(pipe_head, "pipe_head")
         _validate_module_list(pipe_end, "pipe_end")
 
+        # 모듈 시퀀스 구성: pipe_head + (Linear, interlayer)*depth-1 + Linear + pipe_end
         modules = []
         modules.extend(deepcopy(m) for m in pipe_head)
 
