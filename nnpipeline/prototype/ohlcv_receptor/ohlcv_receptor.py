@@ -19,8 +19,9 @@ class OHLCVReceptor(nn.Module):
         self.linear_lower = nn.Linear(2, self.SIDE_DIM)
         self.linear_comb_u = nn.Linear(self.SIDE_DIM, self.HIDDEN)
         self.linear_comb_l = nn.Linear(self.SIDE_DIM, self.HIDDEN)
-        # BatchNorm: V (큰 스케일)와 receptor 처리값 (작은 스케일) 균형
-        self.bn_pv = nn.BatchNorm1d(self.COMBV_INPUT_DIM)
+        # LayerNorm: V (큰 스케일)와 receptor 처리값 (작은 스케일) 균형.
+        # BatchNorm 은 end-to-end 학습 시 running stats 지연으로 eval 이 불안정했음 (260902 교체)
+        self.norm_pv = nn.LayerNorm(self.COMBV_INPUT_DIM)
         self.linear_comb_pv = nn.Linear(self.COMBV_INPUT_DIM, self.HIDDEN_V)
 
         # Unnamed 최종 projection — scalar 압축
@@ -56,13 +57,10 @@ class OHLCVReceptor(nn.Module):
         out_1 = self.proj_u(h_u)
         out_2 = self.proj_l(h_l)
 
-        # out_v: BatchNorm 통과 후 LeakyReLU hidden + projection
+        # out_v: LayerNorm 통과 후 LeakyReLU hidden + projection
         # 첫 노드만 사용하여 그 노드들만 volume 학습 신호 받음
         combv_input = torch.cat([y_1[..., 0:1], hoc_2, y_2[..., 0:1], v], dim=-1)
-        leading_shape = combv_input.shape[:-1]
-        flat = combv_input.reshape(-1, self.COMBV_INPUT_DIM)
-        flat_norm = self.bn_pv(flat)
-        combv_input_norm = flat_norm.reshape(*leading_shape, self.COMBV_INPUT_DIM)
+        combv_input_norm = self.norm_pv(combv_input)
         h_v = torch.nn.functional.leaky_relu(self.linear_comb_pv(combv_input_norm))
         out_v = self.proj_v(h_v)
 

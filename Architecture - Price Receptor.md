@@ -48,7 +48,7 @@ graph LR
     addU --> combU[Linear_combU<br/>2→2, LeakyReLU]
     addL --> combL[Linear_combL<br/>2→2, LeakyReLU]
 
-    y1 -- "y_1[0]" --> bnPV[BatchNorm<br/>5-dim]
+    y1 -- "y_1[0]" --> bnPV[LayerNorm<br/>5-dim]
     hoc2 --> bnPV
     y2 -- "y_2[0]" --> bnPV
     bnPV --> combPV[Linear_combPV<br/>5→4, LeakyReLU]
@@ -195,11 +195,14 @@ hierarchy (예: 1m → 5m → 15m → 1h) 구성 가능. 시간 위치별 분포
 [확정] 거래량 V 는 본 receptor 내부 별도 결합 경로 (out_v) 로 통합 처리. 별도 sub-receptor 불필요.
 
 [확정] 결합 구조:
-- 입력: $y_1[0], hoc_2, y_2[0], V$ → BatchNorm → `Linear_combPV` → projection → out_v
+- 입력: $y_1[0], hoc_2, y_2[0], V$ → LayerNorm → `Linear_combPV` → projection → out_v
 - $y_1, y_2$ 의 **첫 노드만** volume 결합에 사용 → 자동 specialization (첫 노드 = volume-interactive, 둘째 노드 = pure price)
 - $V$ 정규화는 외부에서 log + 표준화 (rolling z-norm, §5 참조)
 
-[확정] BatchNorm 사용 이유: V (큰 스케일) 와 receptor 처리값 (작은 스케일) 의 분포 차이를 흡수.
+[확정] LayerNorm 사용 이유: V (큰 스케일) 와 receptor 처리값 (작은 스케일) 의 분포 차이를 흡수.
+원래 BatchNorm 이었으나 260902 LayerNorm 으로 교체 — end-to-end 학습 시 running stats 지연으로
+eval 성능이 epoch 간 요동 (R² +0.4 ↔ -10) 하는 문제 확인, LayerNorm 교체 후 완전 안정화
+(`experiments/decay_bank_ladder/` 진단). per-sample 정규화라 running stats 부재, train/eval 동작 동일.
 
 ---
 
@@ -223,6 +226,7 @@ hierarchy (예: 1m → 5m → 15m → 1h) 구성 가능. 시간 위치별 분포
 - **실제 OHLC 데이터에서의 검증** — 합성 캔들 검증만 완료. 실제 시장 데이터 generalization 미확인.
 - **시간 해상도별 적정성** — 일봉/분봉/틱마다 적정 hyperparameter 가 다를 수 있음.
 - **canonical pattern 외 추가 검증** — Long-Legged Doji 등 일부 패턴은 의도 분해와 다른 위치에 떨어졌음. 의미 해석 필요.
+- ~~**BatchNorm (bn_pv) 의 eval 불안정**~~ — 해결 (260902): LayerNorm 으로 교체, §7 참조.
 
 ---
 
