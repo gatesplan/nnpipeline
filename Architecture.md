@@ -9,6 +9,8 @@
 - Receptor (`OHLCVReceptor`) 는 한 캔들(OHLC + V) 을 고정 차원 임베딩으로 변환하는 per-candle tokenizer.
 - Receptor Bundle (`ReceptorBundle`) 은 receptor 또는 다른 bundle 을 자식 노드로 묶는 composite 컨테이너로,
   multi-resolution candle hierarchy 의 한 단계를 표현한다.
+- Decay Bank (`DecayBank`) 는 임베딩 시퀀스를 다중 시간스케일 지수 감쇠 상태로 누적하는 척추 모듈.
+  recency bias 와 모멘텀 감쇠 신호 (fast-slow 차이) 를 구조로 보장한다. 설계: `Architecture - Decay Bank.md`.
 
 ## 컴포넌트
 
@@ -52,10 +54,19 @@ classDiagram
         +forward(hocl, v)
     }
 
+    class DecayBank {
+        +n_scales: int
+        +out_scales: int
+        +lambdas: Tensor
+        +half_lives: Tensor
+        +forward(e, return_sequence)
+    }
+
     nn_Sequential <|-- Cylinder
     nn_Sequential <|-- Pyramid
     nn_Module <|-- OHLCVReceptor
     nn_Module <|-- ReceptorBundle
+    nn_Module <|-- DecayBank
     ReceptorBundle o-- "1..*" nn_Module : children
     ReceptorBundle o-- "1" nn_Module : aggregator
 ```

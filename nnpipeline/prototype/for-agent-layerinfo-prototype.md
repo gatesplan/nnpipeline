@@ -14,3 +14,11 @@ OHLCVReceptor.forward(hocl: torch.Tensor, v: torch.Tensor) -> torch.Tensor
 ReceptorBundle.__init__(children: list, aggregator: nn.Module)
 ReceptorBundle.forward(hocl: torch.Tensor, v: torch.Tensor) -> torch.Tensor
 ReceptorBundle.n_leaves: int
+
+## decay_bank
+DecayBank.__init__(half_lives: tuple = (2.0, 8.0, 32.0), learnable: bool = True, include_diffs: bool = True, bias_correction: bool = True)
+DecayBank.forward(e: torch.Tensor, return_sequence: bool = False) -> torch.Tensor
+DecayBank.n_scales: int
+DecayBank.out_scales: int
+DecayBank.lambdas: torch.Tensor
+DecayBank.half_lives: torch.Tensor
