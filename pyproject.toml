@@ -30,3 +30,7 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://github.com/gatesplan/nnpipeline"
 "Issues" = "https://github.com/gatesplan/nnpipeline/issues"
+
+[tool.setuptools.packages.find]
+include = ["nnpipeline*"]
+exclude = ["experiments*", "FAN*", "runs*", "tests*"]

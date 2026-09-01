@@ -1,5 +1,6 @@
 .idea/
 __pycache__/
+*.egg-info/
 
 # Local settings
 .claude/settings.local.json
