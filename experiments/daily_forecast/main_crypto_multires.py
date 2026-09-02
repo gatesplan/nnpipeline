@@ -164,9 +164,9 @@ def donchian_trail(names, arrs, bars_per_year, k, m, fee):
     logc = np.log(close)
     r = np.diff(logc, axis=0)
 
-    # rolling 지표 사전 계산 (루프 내 O(k) 슬라이스 제거)
-    hh_roll = pd.DataFrame(high).rolling(k).max().values
-    ll_roll = pd.DataFrame(low).rolling(k).min().values
+    # rolling 지표 사전 계산 (루프 내 O(k) 슬라이스 제거). 채널은 직전 봉까지
+    hh_roll = pd.DataFrame(high).rolling(k).max().shift(1).values
+    ll_roll = pd.DataFrame(low).rolling(k).min().shift(1).values
     sig_roll = pd.DataFrame(r).rolling(VOL_LOOKBACK).std().values   # r 인덱스 기준
 
     port = np.zeros(T - 1)
