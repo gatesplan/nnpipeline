@@ -43,18 +43,29 @@ def load_stocks(tickers, api, years: int = 10, min_candles: int = 600):
 
 
 def build_arrays(stocks, window: int, max_horizon: int,
-                 train_frac: float = 0.70, val_frac: float = 0.15):
+                 train_frac: float = 0.70, val_frac: float = 0.15,
+                 cutoff_ts=None):
     """전 종목 연결 배열 + 분할별 윈도우 시작 인덱스.
+
+    cutoff_ts=(train_end, val_end[, test_end]) 를 주면 절대 timestamp 로 분할
+    (walk-forward 용). test_end 이후 윈도우는 어느 분할에도 넣지 않음.
+    없으면 전체 달력 구간의 비율 (train_frac / val_frac) 로 분할.
 
     반환: (hocl_all (Ttot,4), v_all (Ttot,), ts_all (Ttot,) int64,
            starts: dict[str, LongTensor],
            tick_ids: dict[str, LongTensor] — 시작 인덱스별 종목 번호)
     """
-    t_min = min(int(ts[0]) for _, ts, _, _ in stocks)
-    t_max = max(int(ts[-1]) for _, ts, _, _ in stocks)
-    span = t_max - t_min
-    train_end = t_min + train_frac * span
-    val_end = t_min + (train_frac + val_frac) * span
+    test_end = None
+    if cutoff_ts is not None:
+        train_end, val_end = cutoff_ts[0], cutoff_ts[1]
+        if len(cutoff_ts) > 2:
+            test_end = cutoff_ts[2]
+    else:
+        t_min = min(int(ts[0]) for _, ts, _, _ in stocks)
+        t_max = max(int(ts[-1]) for _, ts, _, _ in stocks)
+        span = t_max - t_min
+        train_end = t_min + train_frac * span
+        val_end = t_min + (train_frac + val_frac) * span
 
     hocl_parts, v_parts, ts_parts = [], [], []
     starts = {"train": [], "val": [], "test": []}
@@ -73,10 +84,10 @@ def build_arrays(stocks, window: int, max_horizon: int,
                 key = "train"
             elif ts_first >= train_end and ts_last < val_end:
                 key = "val"
-            elif ts_first >= val_end:
+            elif ts_first >= val_end and (test_end is None or ts_last < test_end):
                 key = "test"
             else:
-                continue  # 경계 걸침 — purge
+                continue  # 경계 걸침 또는 test_end 이후 — purge/제외
             starts[key].append(offset + i)
             tick_ids[key].append(tid)
         offset += T
