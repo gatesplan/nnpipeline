@@ -20,7 +20,7 @@ class OHLCVReceptor(nn.Module):
         self.linear_comb_u = nn.Linear(self.SIDE_DIM, self.HIDDEN)
         self.linear_comb_l = nn.Linear(self.SIDE_DIM, self.HIDDEN)
         # LayerNorm: V (큰 스케일)와 receptor 처리값 (작은 스케일) 균형.
-        # BatchNorm 은 end-to-end 학습 시 running stats 지연으로 eval 이 불안정했음 (260902 교체)
+        # per-sample 정규화라 running stats 가 없어 train/eval 동작이 동일해야 하는 제약 충족
         self.norm_pv = nn.LayerNorm(self.COMBV_INPUT_DIM)
         self.linear_comb_pv = nn.Linear(self.COMBV_INPUT_DIM, self.HIDDEN_V)
 

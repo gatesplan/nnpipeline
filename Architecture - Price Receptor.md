@@ -27,10 +27,10 @@ NLP 의 word embedding 과 같은 역할: 시퀀스 안에서 파라미터 공�
 
 ```mermaid
 graph LR
-    H[H] --> linU[Linear_upper<br/>2→2, LeakyReLU]
+    H[H] --> linU[Linear_upper<br/>2→2, tanh]
     O[O] --> linOC["Linear_OC<br/>2 → 4"]
     C[C] --> linOC
-    L[L] --> linL[Linear_lower<br/>2→2, LeakyReLU]
+    L[L] --> linL[Linear_lower<br/>2→2, tanh]
     V[V<br/>rolling z-norm] --> bnPV
 
     linOC --> hoc1["hoc_1 ∈ ℝ"]
@@ -61,12 +61,13 @@ graph LR
 [확정] **`Linear_OC` 는 단순 선형층** (활성함수 없음). 입력에 가까운 단계에서 활성함수 게이팅이
 정보의 절반(음수 영역)을 차단하는 위험을 피한다. 비선형성은 이후 단계에서 공급.
 
-[확정] **모든 활성함수는 LeakyReLU** (기본 slope=0.01). 사전 실험에서 ReLU 사용 시 Linear_lower 경로
-dead neuron 문제 (pre-activation 항상 음수 → 영구 0 출력) 발견. LeakyReLU 로 음수 입력에도 작은 기울기
-유지하여 gradient 흐름 보장.
+[확정] **활성함수 배치**: `Linear_upper`, `Linear_lower` 는 **tanh** (signed 입력의 대칭 처리 —
+정규화된 입력이 0 을 중심으로 양·음 대칭이므로 음수 영역을 차단하지 않는 유계 활성 사용).
+결합 경로 (`Linear_combU/combL/combPV`) 는 **LeakyReLU** (기본 slope=0.01) — 사전 실험에서 ReLU 사용 시
+dead neuron 문제 (pre-activation 항상 음수 → 영구 0 출력) 발견, 음수 입력에도 작은 기울기 유지.
 
-[확정] **`Linear_upper`, `Linear_lower` 는 선형층 + LeakyReLU**. 단일 노드 scalar 대신 2 차원 벡터
-($y_1, y_2 \in \mathbb{R}^2$) 로 표현력 확장. 차원은 hyperparameter `side_dim` (기본 2).
+[확정] **`Linear_upper`, `Linear_lower` 는 선형층 + tanh**. 단일 노드 scalar 대신 2 차원 벡터
+($y_1, y_2 \in \mathbb{R}^2$) 로 표현력 확장. 차원은 구조 상수 `SIDE_DIM = 2`.
 
 [확정] **`hoc_2` 도 $\mathbb{R}^2$ 벡터** (side_dim 과 동일). Linear_OC 출력은 $1 + 2 + 1 = 4$ 차원으로 분할:
 $hoc_1$ (scalar), $hoc_2$ (2-vector), $hoc_3$ (scalar). 단일 scalar 로 공통 특성을 표현하기엔 부족하다는 판단.
@@ -103,21 +104,22 @@ downstream 비선형 결합에서 활용된다.
 | 모듈 | 구조 | 입력 → 출력 | 의미 |
 |---|---|---|---|
 | `Linear_OC` | `Linear(2, 4)` (선형, LeakyReLU 없음) | $\mathbb{R}^2 \to \mathbb{R}^4$ | OC 에서 $hoc_1$ (1), $hoc_2$ (2), $hoc_3$ (1) 추출 |
-| `Linear_upper` | `Linear(2, 2) + LeakyReLU` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $H$ 와 $hoc_1$ 결합 → $y_1$ |
-| `Linear_lower` | `Linear(2, 2) + LeakyReLU` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $L$ 과 $hoc_3$ 결합 → $y_2$ |
+| `Linear_upper` | `Linear(2, 2) + tanh` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $H$ 와 $hoc_1$ 결합 → $y_1$ |
+| `Linear_lower` | `Linear(2, 2) + tanh` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $L$ 과 $hoc_3$ 결합 → $y_2$ |
 | `Linear_combU` | `Linear(2, 2) + LeakyReLU` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $y_1 + hoc_2$ 처리 (hidden) |
 | `Linear_combL` | `Linear(2, 2) + LeakyReLU` | $\mathbb{R}^2 \to \mathbb{R}^2$ | $y_2 + hoc_2$ 처리 (hidden) |
+| `norm_pv` | `LayerNorm(5)` | $\mathbb{R}^5 \to \mathbb{R}^5$ | combPV 입력 스케일 정규화 |
 | `Linear_combPV` | `Linear(5, 4) + LeakyReLU` | $\mathbb{R}^5 \to \mathbb{R}^4$ | $y_1[0], hoc_2, y_2[0], V$ 처리 (hidden) |
 | (unnamed) `Linear(2, 1)` | 선형 | $\mathbb{R}^2 \to \mathbb{R}$ | combU → $out_1$ scalar 압축 |
 | (unnamed) `Linear(2, 1)` | 선형 | $\mathbb{R}^2 \to \mathbb{R}$ | combL → $out_2$ scalar 압축 |
 | (unnamed) `Linear(4, 1)` | 선형 | $\mathbb{R}^4 \to \mathbb{R}$ | combPV → $out_v$ scalar 압축 |
 
-[확정] Hyperparameters:
-- `side_dim` (기본 2): $hoc_2, y_1, y_2$ 의 차원
-- `hidden` (기본 2): `Linear_combU/combL` 의 hidden 차원
-- `hidden_v` (기본 4): `Linear_combPV` 의 hidden 차원
+[확정] 구조 상수 (클래스 상수로 고정, hyperparameter 아님):
+- `SIDE_DIM = 2`: $hoc_2, y_1, y_2$ 의 차원
+- `HIDDEN = 2`: `Linear_combU/combL` 의 hidden 차원
+- `HIDDEN_V = 4`: `Linear_combPV` 의 hidden 차원
 
-[확정] 기본값 기준 총 파라미터 약 71.
+[확정] 총 파라미터 약 71 + LayerNorm affine 10.
 
 [추측] **명명 vs unnamed 구분 의도**: 명명 layer 는 의미 있는 표현 학습 (Linear + LeakyReLU 로 비선형 변환).
 Unnamed 최종 projection 은 단순 scalar 압축 — architecture 의 표현력 핵심이 아님. 다이어그램에서 노드 없이 edge 로만 표시.
