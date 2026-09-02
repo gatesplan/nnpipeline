@@ -45,6 +45,18 @@ fast-slow 차이가 모멘텀이 아닌 크기 왜곡을 반영하게 됨.
 $h_k[n] = (1-\lambda_k)\sum_t \lambda_k^{n-1-t} e_t$ 를 einsum 으로 병렬 계산 (지수 ≥ 0, 수치 안정).
 전체 궤적 (`return_sequence=True`) 은 시간 루프.
 
+[확정] **robust 누적 옵션** (`robust_clip`, 기본 off): 갱신량 (innovation) $e_t - h$ 를
+$\pm c \cdot s$ 로 제한. $s$ 는 $|e_t - h|$ 의 지수가중평균 (스케일별·채널별, 해당 스케일의 $\lambda_k$ 공유,
+clipping 후 값으로 갱신 — 이상치가 스케일 추정 자체를 오염시키지 않게). 초기 `robust_warmup` 스텝은
+clipping 없이 $s$ 만 추정. 목적: 평균 기반 누적의 비유계 이상치 영향을 제한하여, $\lambda$ 가 이상치
+희석 목적으로 반감기를 늘리는 왜곡 방지. clipping 활성 시 재귀가 비선형이라 시간 루프로 계산.
+
+[확정] **병렬 이중 상태 옵션** (`robust_dual`, 기본 off): clipping 미적용·적용 상태를 같은 $\lambda$ 로
+동시에 누적하여 스케일 축에 [미적용 블록, 적용 블록] 순서로 이어붙임 (out_scales 2 배). 이상치 제거와
+레짐 전환 반응성은 발생 시점에 구별 불가능하므로, 판단을 구조에 심지 않고 두 상태를 모두 노출하여
+downstream 이 선택하게 한다 (hoc_2 addition·diff 출력과 같은 설계 방침). 두 상태의 차이는
+"직전 구간에 이상치가 있었다" 는 지표로도 기능.
+
 [확정] 파라미터 수 = $K$ ($\lambda$ logit 뿐). 표현력은 입력 임베딩과 downstream 이 담당,
 본 모듈은 시간 누적 구조만 제공.
 
@@ -87,6 +99,18 @@ particle filter feasible bound 의 **96~100% 유지**. 선형 가우시안 밖�
 고정 λ 의 한계 (시변 최적 gain) 를 비선형 receptor + head 의 암묵적 재정규화가 보상하는 것으로 해석.
 λ 계기판도 반응: 레짐 층 추가 시 느린 스케일 반감기가 ~30 → ~57 로 상승 (레짐 지속 시간 추론용 장기 기억).
 남은 소폭 손실 (L3 fat tail 에서 -4~6%p) 은 이상치 대응 (robust 누적) 검토 근거.
+
+[확정] innovation clipping (`robust_clip`) 검증 (`experiments/decay_bank_ladder/main_robust.py`, c=3 고정):
+- L3 에서 창 길이를 넘던 학습 반감기 (~210봉) 가 60봉으로 복귀 — 이상치 희석을 위해
+  반감기를 늘리던 행동이 사라짐. 기제 확인.
+- L3 capture 93.9% → 95.2% (부분 회복). L0~L1 은 저하 없음, L2 는 -2%p
+  (레짐 전환 직후의 큰 innovation 이 진짜 신호인데 일부 절단되는 비용으로 추정).
+
+[확정] 병렬 이중 상태 (`robust_dual`) 검증 (`experiments/decay_bank_ladder/main_dual.py`):
+clipping 미적용·적용 상태를 모두 출력하고 head 가 선택. capture 가 L0~L3 에서 94.7~98.9% 로
+세 변형 (기본 / clipping 단독 / dual) 중 층 간 편차가 가장 작음. clipping 단독의 L2 저하 해소
+(95.5% → 98.0%). 단, 변형 간 차이가 단일 seed 기준 ±1%p 수준이라 이 데이터의 점프 강도에서는
+결정적 우열 판단 불가 — 옵션으로 유지하고 실데이터 또는 더 강한 이상치 조건에서 재평가.
 receptor 를 LayerNorm 으로 교체 (260902, Price Receptor 문서 §7) 후 재실행: 학습이 완전 안정화된
 상태에서 capture 94~100% 재확인 — BatchNorm 시절 결과가 checkpoint 선택의 산물이 아님을 확인.
 L3 에서 느린 스케일 반감기가 ~210 (창 길이 초과) 으로 상승 — 이상치 억제용 근사-균등 평균으로 분화한 것으로 해석.
@@ -101,6 +125,8 @@ L3 에서 느린 스케일 반감기가 ~210 (창 길이 초과) 으로 상승 �
   downstream 기여 없는 스케일 제거로 유효 K 를 자동 결정하는 절차. group sparsity 병용 검토.
 - **실데이터 검증** — 합성 (선형 가우시안) 에서는 bound 포화. 실데이터의 비선형·비정상 구조에서
   같은 결론이 유지되는지 미확인.
+- **robust_clip 문턱 c 의 결정** — c=3 고정 검증에서 이상치 층은 개선, 레짐 층은 소폭 손해.
+  c 를 학습 파라미터로 두거나 층별 스윕으로 적정값 결정 필요. warmup 길이 (기본 8) 도 동일.
 
 ---
 

@@ -166,6 +166,93 @@ class TestDecayBankSemantics:
         bank(e, return_sequence=True).sum().backward()
         assert e.grad is not None
 
+    def test_robust_rejects_nonpositive_clip(self):
+        with pytest.raises(ValueError):
+            DecayBank(robust_clip=0.0)
+        with pytest.raises(ValueError):
+            DecayBank(robust_clip=-1.0)
+
+    def test_robust_rejects_non_numeric_clip(self):
+        with pytest.raises(TypeError):
+            DecayBank(robust_clip="big")
+
+    def test_robust_shapes_match_default(self):
+        bank = DecayBank(half_lives=(2.0, 8.0, 32.0), robust_clip=3.0)
+        e = torch.randn(7, 16, 3)
+        assert bank(e).shape == (7, 5, 3)
+        assert bank(e, return_sequence=True).shape == (7, 16, 5, 3)
+
+    def test_robust_final_matches_sequence_last_step(self):
+        bank = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0)
+        e = torch.randn(4, 30, 3)
+        assert torch.allclose(bank(e), bank(e, return_sequence=True)[:, -1], atol=1e-5)
+
+    def test_robust_constant_input_unchanged(self):
+        # 상수 시퀀스는 innovation 이 0 → clipping 무영향, 상태는 그 상수
+        bank = DecayBank(half_lives=(2.0, 8.0), include_diffs=False, robust_clip=3.0)
+        e = torch.full((1, 20, 2), 2.5)
+        assert torch.allclose(bank(e), torch.full((1, 2, 2), 2.5), atol=1e-5)
+
+    def test_robust_equals_default_without_outliers(self):
+        # 정상 범위 innovation 만 있으면 (완만한 시퀀스) robust 와 기본이 거의 일치
+        base = DecayBank(half_lives=(4.0, 16.0), robust_clip=None)
+        rob = DecayBank(half_lives=(4.0, 16.0), robust_clip=10.0)
+        t = torch.arange(40, dtype=torch.float32)
+        e = torch.sin(t / 5.0).view(1, 40, 1)
+        assert torch.allclose(base(e), rob(e), atol=1e-4)
+
+    def test_robust_suppresses_jump(self):
+        # 점프 하나가 낀 시퀀스: robust 상태가 기본 상태보다 무점프 상태에 가까워야 함
+        base = DecayBank(half_lives=(2.0, 8.0), include_diffs=False)
+        rob = DecayBank(half_lives=(2.0, 8.0), include_diffs=False, robust_clip=3.0)
+        torch.manual_seed(0)
+        clean = torch.randn(1, 40, 1) * 0.1
+        jumped = clean.clone()
+        jumped[0, 35, 0] += 5.0
+        ref = base(clean)
+        err_base = (base(jumped) - ref).abs().sum()
+        err_rob = (rob(jumped) - ref).abs().sum()
+        assert err_rob < err_base * 0.5
+
+    def test_dual_requires_robust_clip(self):
+        with pytest.raises(ValueError):
+            DecayBank(robust_dual=True)
+
+    def test_dual_shapes(self):
+        bank = DecayBank(half_lives=(2.0, 8.0, 32.0), robust_clip=3.0, robust_dual=True)
+        assert bank.out_scales == 10
+        e = torch.randn(7, 16, 3)
+        assert bank(e).shape == (7, 10, 3)
+        assert bank(e, return_sequence=True).shape == (7, 16, 10, 3)
+
+    def test_dual_first_block_matches_plain_bank(self):
+        # 미적용 블록은 robust 없는 기본 bank 출력과 동일해야 함
+        plain = DecayBank(half_lives=(2.0, 8.0))
+        dual = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0, robust_dual=True)
+        e = torch.randn(4, 30, 3)
+        assert torch.allclose(dual(e)[..., :3, :], plain(e), atol=1e-5)
+
+    def test_dual_second_block_matches_robust_bank(self):
+        rob = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0)
+        dual = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0, robust_dual=True)
+        e = torch.randn(4, 30, 3)
+        assert torch.allclose(dual(e)[..., 3:, :], rob(e), atol=1e-5)
+
+    def test_dual_gradient_flows(self):
+        bank = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0, robust_dual=True)
+        e = torch.randn(3, 15, 2, requires_grad=True)
+        bank(e).sum().backward()
+        assert e.grad is not None
+        assert torch.all(torch.isfinite(bank.lambda_logit.grad))
+
+    def test_robust_gradient_flows(self):
+        bank = DecayBank(half_lives=(2.0, 8.0), robust_clip=3.0)
+        e = torch.randn(3, 15, 2, requires_grad=True)
+        bank(e).sum().backward()
+        assert e.grad is not None
+        assert bank.lambda_logit.grad is not None
+        assert torch.all(torch.isfinite(bank.lambda_logit.grad))
+
     def test_no_bias_correction_shrinks_slow_scale(self):
         # 보정 없으면 짧은 창에서 느린 스케일 상태가 체계적으로 작아짐 (설계 근거 확인)
         bank = DecayBank(half_lives=(2.0, 32.0), include_diffs=False, bias_correction=False)

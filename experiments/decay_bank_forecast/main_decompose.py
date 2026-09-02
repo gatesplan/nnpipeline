@@ -60,10 +60,16 @@ class BankForecaster(nn.Module):
 
 class ReceptorBankForecaster(nn.Module):
 
-    def __init__(self, half_lives: tuple, head: str):
+    def __init__(
+        self, half_lives: tuple, head: str,
+        robust_clip: float = None, robust_dual: bool = False,
+    ):
         super().__init__()
         self.receptor = OHLCVReceptor()
-        self.bank = DecayBank(half_lives=half_lives, learnable=True)
+        self.bank = DecayBank(
+            half_lives=half_lives, learnable=True,
+            robust_clip=robust_clip, robust_dual=robust_dual,
+        )
         feat_dim = self.bank.out_scales * 3
         self.head = _make_head(head, feat_dim)
 

@@ -19,16 +19,26 @@ lambdas: torch.Tensor           # 현재 유효 감쇠율 λ_k ∈ (0,1). shape 
 half_lives: torch.Tensor        # 현재 유효 반감기 (학습으로 변동 가능). shape (K,)
 include_diffs: bool
 bias_correction: bool
+robust_clip: float | None       # innovation clipping 문턱 (스케일 추정치 배수). None 이면 비활성
+robust_warmup: int              # clipping 을 적용하지 않고 스케일 추정만 하는 초기 스텝 수
+robust_dual: bool               # True 면 clipping 미적용·적용 상태를 모두 출력 (out_scales 2 배)
 
 ### __init__
 __init__(half_lives: tuple = (2.0, 8.0, 32.0), learnable: bool = True,
-         include_diffs: bool = True, bias_correction: bool = True)
+         include_diffs: bool = True, bias_correction: bool = True,
+         robust_clip: float = None, robust_warmup: int = 8, robust_dual: bool = False)
     raise TypeError, ValueError
     half_lives: 양수 순증가 시퀀스 (빠른 스케일 → 느린 스케일). λ_k = 2^(-1/h_k) 로 초기화.
     learnable=False 면 λ logit 을 buffer 로 등록 (고정).
     include_diffs=True 는 스케일 2 개 이상 필요.
     bias_correction=True 면 가중치 합 (1-λ^n) 으로 나눠 창 길이·스케일 무관 가중평균화
     (Adam bias correction 과 동일 원리 — 느린 스케일이 짧은 창에서 체계적으로 작아지는 왜곡 제거).
+    robust_clip=c 지정 시 innovation clipping 활성: 갱신량 (e_t - h) 를 ±c·s 로 제한.
+    s 는 |innovation| 의 지수가중평균 (스케일별·채널별, 감쇠율은 해당 스케일의 λ_k 공유,
+    clipping 후 값으로 갱신). 첫 robust_warmup 스텝은 clipping 없이 s 만 추정.
+    s = 0 인 위치는 clipping 을 건너뜀. robust_clip 은 양수, robust_warmup 은 1 이상 정수.
+    robust_dual=True 면 clipping 미적용 상태와 적용 상태를 같은 λ 로 동시에 누적하여
+    스케일 축에 [미적용 블록, 적용 블록] 순서로 이어붙임. robust_clip 지정 필수.
     파라미터 수 = K (λ logit 뿐).
 
 ### Methods
@@ -39,6 +49,7 @@ forward(e: torch.Tensor, return_sequence: bool = False) -> torch.Tensor
     반환: (..., out_scales, d) — 시점 n 상태. 스케일 축 순서: [h_1..h_K, h_1-h_2, ..., h_{K-1}-h_K].
     return_sequence=True: (..., n, out_scales, d) — 전체 시점 궤적 (검증·시각화·중간 supervision 용).
     final 모드는 닫힌 형태 einsum (병렬), sequence 모드는 시간 루프.
+    robust_clip 지정 시 재귀가 비선형이므로 두 모드 모두 시간 루프로 계산.
 
 ## 의도된 inductive bias
 
